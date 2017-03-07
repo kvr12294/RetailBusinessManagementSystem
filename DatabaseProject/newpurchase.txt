@@ -1,0 +1,55 @@
+/* ******************************************************* ADD Values to purchases and products */
+create or replace package rbms as
+procedure addpurchases(
+	e_id in purchases.eid%TYPE,
+	p_id in purchases.pid%TYPE,
+	c_id in purchases.cid%TYPE,
+	pur_qty in purchases.qty%TYPE
+	);
+procedure addproduct(pid1 in products.pid%TYPE,p_name in products.pname%TYPE,q_onhand in products.qoh%TYPE,threshold in products.qoh_threshold%TYPE,op in products.original_price%TYPE,discount in products.discnt_rate%TYPE);
+end;
+/
+show errors 	
+create or replace package body rbms as
+procedure addpurchases(
+	e_id in purchases.eid%TYPE,
+	p_id in purchases.pid%TYPE,
+	c_id in purchases.cid%TYPE,
+	pur_qty in purchases.qty%TYPE
+	) is
+discountRate products.discnt_rate%TYPE; 
+originalPrice products.original_price%TYPE;
+newQoh products.qoh%TYPE;
+purTotal products.original_price%TYPE;
+newVisitsmade customers.visits_made%TYPE;
+insufficientQuantity exception;
+begin
+select original_price,discnt_rate,qoh into originalPrice,discountRate,newQoh from products where products.pid=p_id;
+if(pur_qty <= newQoh) then
+purTotal := pur_qty*(originalPrice*(1-discountRate));
+newQoh := newQoh - pur_qty;
+insert into purchases (pur,eid,pid,cid,qty,ptime,total_price) values (pur.nextval,e_id,p_id,c_id,pur_qty,sysdate,purTotal); 
+update products set qoh = newQoh where pid = p_id;
+select visits_made into newVisitsmade from customers where cid = c_id;
+newVisitsmade := newVisitsmade + 1;
+update customers set visits_made = newVisitsmade, last_visit_date = sysdate where cid = c_id;	
+else
+raise insufficientQuantity;
+end if;
+exception
+when insufficientQuantity then 
+dbms_output.put_line('Not enough quantity in stock:-');
+end;
+
+procedure addproduct(pid1 in products.pid%TYPE,p_name in products.pname%TYPE,q_onhand in products.qoh%TYPE,threshold in products.qoh_threshold%TYPE,op in products.original_price%TYPE,discount in products.discnt_rate%TYPE) is
+begin
+insert into products(pid,pname,qoh,qoh_threshold,original_price,discnt_rate) values (pid1,p_name,q_onhand,threshold,op,discount);
+end;
+end;
+/
+show errors
+
+/* ************************************************************************************************************************************ */
+
+execute rbms.addpurchases(&e_id,&p_id,&c_id,&pur_qty);
+execute rbms.addproducts(&);

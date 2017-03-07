@@ -1,0 +1,51 @@
+/* *************************************************************** updates visits-made and threshold **************************************************************************** */
+procedure proc_update_qoh( 
+        v_pid in products.pid%TYPE) is 
+        v_qoh products.qoh%TYPE; 
+        v_threshold products.qoh_threshold%TYPE; 
+        supply_min number(4); 
+        v_sid suppliers.sid%TYPE; 
+begin 
+        select qoh,qoh_threshold into v_qoh,v_threshold 
+        from products 
+        where pid=v_pid; 
+ 
+        if (v_qoh<v_threshold) then 
+                dbms_output.put_line('QOH value below Threshold'); 
+                supply_min:=(v_threshold-v_qoh)+11; 
+                select sid into v_sid 
+                from supply 
+                where pid=v_pid and rownum<=1 
+                ORDER BY sid ASC; 
+ 
+                insert into supply values(sup#.nextval,v_pid,v_sid,sysdate,supply_min); 
+        end if; 
+end; 
+
+
+set serveroutput on
+create or replace trigger qoh_decrease_trigger
+after insert on purchases
+for each row
+begin
+ update products
+ set qoh=qoh-:new.qty
+ where pid=:new.pid;
+        proc_update_qoh(:new.pid);
+end;
+/
+show errors
+
+
+set serveroutput on
+create or replace trigger trig_supply
+after insert on supply
+for each row
+begin
+ update products
+ set qoh=qoh+:new.quantity
+ where pid=:new.pid;
+end;
+/
+show errors
+/* ************************************************************************************************************************************************************** */
